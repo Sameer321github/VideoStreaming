@@ -1,7 +1,7 @@
 import './style.css';
 let mediaRecorder;
 let recordedChunks = [];
-
+const socket = io("https://videostreaming-sv2j.onrender.com");
 import firebase from 'firebase/app';
 import 'firebase/firestore';
 
