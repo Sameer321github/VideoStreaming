@@ -22,6 +22,6 @@ video {
   justify-content: center;
 }
 
-#webcamVideo {
+video#webcamVideo {
   transform: scaleX(-1) !important;
 }
