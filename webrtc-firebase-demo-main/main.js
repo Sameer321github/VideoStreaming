@@ -41,6 +41,7 @@ pc.onconnectionstatechange = () => {
   if (pc.connectionState === 'connected') {
     console.log('Peer connected → start recording');
     startRecording();
+    startDurationTimer();
   }
 
   if (
@@ -50,6 +51,7 @@ pc.onconnectionstatechange = () => {
   ) {
     console.log('Peer disconnected → stop recording');
     stopRecording();
+    stopDurationTimer()
     cleanupMedia();
 
     webcamButton.disabled = false;
@@ -280,4 +282,42 @@ function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
+}
+
+
+// Mic and Camera toggles
+const toggleMic = document.getElementById('toggleMic');
+const toggleCamera = document.getElementById('toggleCamera');
+
+toggleMic.onclick = () => {
+  const audioTrack = localStream.getAudioTracks()[0];
+  audioTrack.enabled = !audioTrack.enabled;
+  toggleMic.textContent = audioTrack.enabled ? '🎙️ Mute' : '🔇 Unmute';
+};
+
+toggleCamera.onclick = () => {
+  const videoTrack = localStream.getVideoTracks()[0];
+  videoTrack.enabled = !videoTrack.enabled;
+  toggleCamera.textContent = videoTrack.enabled ? '📷 Hide Camera' : '📷 Show Camera';
+};
+
+// Debate duration timer
+let durationInterval = null;
+let durationSeconds = 0;
+const durationDisplay = document.getElementById('debateDuration');
+
+function startDurationTimer() {
+  durationSeconds = 0;
+  durationInterval = setInterval(() => {
+    durationSeconds++;
+    const mins = String(Math.floor(durationSeconds / 60)).padStart(2, '0');
+    const secs = String(durationSeconds % 60).padStart(2, '0');
+    durationDisplay.textContent = `Duration: ${mins}:${secs}`;
+  }, 1000);
+}
+
+function stopDurationTimer() {
+  clearInterval(durationInterval);
+  durationSeconds = 0;
+  durationDisplay.textContent = 'Duration: 00:00';
 }
