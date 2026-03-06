@@ -39,7 +39,6 @@
 
 
 
-// --------------------------------------------------------------------------------------------
 
 
 
@@ -50,7 +49,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { createClient } from "@deepgram/sdk";
+import deepgramPkg from "@deepgram/sdk";
+const { createClient } = deepgramPkg;
 
 dotenv.config();
 
