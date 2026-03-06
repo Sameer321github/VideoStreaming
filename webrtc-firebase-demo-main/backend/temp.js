@@ -3,9 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import deepgramPkg from "@deepgram/sdk";
-const { createClient } = deepgramPkg;
-
+import { createClient } from "@deepgram/sdk";
 dotenv.config();
 
 const app = express();
