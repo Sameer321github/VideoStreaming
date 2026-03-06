@@ -105,3 +105,27 @@ button:disabled {
   padding: 0.5rem 1rem;
   border: 2px solid #2c3e50;
 }
+
+
+
+
+
+.debate-status {
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #2c3e50;
+  background: #fff;
+}
+
+.round-display {
+  font-size: 0.85rem;
+  font-weight: bold;
+  padding: 0.5rem;
+}
+
+.phase-timer {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #e74c3c;
+  min-width: 50px;
+}

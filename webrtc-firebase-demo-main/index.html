@@ -35,6 +35,11 @@
     <input id="callInput" placeholder="Enter Call ID" />
     <button id="answerButton" disabled>Answer</button>
     <button id="hangupButton" disabled>Hangup</button>
+    <button id="startDebate" disabled>▶ Start Debate</button>
+    <button id="endArgument" disabled>✋ End Argument</button>
+    <div id="roundDisplay" class="round-display"></div>
+    <div id="debateStatus" class="debate-status">Waiting to start...</div>
+    <div id="phaseTimer" class="phase-timer"></div>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>

@@ -3,9 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { createClient } from "@deepgram/sdk";
-dotenv.config();
+import { DeepgramClient } from "@deepgram/sdk";
 
+const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -22,8 +22,7 @@ app.get("/", (req, res) => {
   res.send("Backend working");
 });
 
-// ─── Deepgram client ───────────────────────────────────────────────────────
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+
 
 const DEBATE_OPTIONS = {
   model: "nova-2",
