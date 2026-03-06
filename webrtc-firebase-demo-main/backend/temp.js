@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { DeepgramClient } from "@deepgram/sdk";
 
+dotenv.config();
 const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
 const app = express();
 const httpServer = createServer(app);
@@ -48,8 +49,8 @@ async function transcribeBuffer(chunks, socketId, speaker, round) {
 
   try {
     const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-      combined,
-      { ...DEBATE_OPTIONS, mimetype: "audio/webm" }
+    combined,
+    { ...DEBATE_OPTIONS, mimetype: "audio/webm" }
     );
 
     if (error) {
