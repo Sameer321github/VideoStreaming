@@ -4,9 +4,10 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { createClient } from "@deepgram/sdk";
+dotenv.config();
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
-dotenv.config();
+
 
 const app = express();
 const httpServer = createServer(app);
