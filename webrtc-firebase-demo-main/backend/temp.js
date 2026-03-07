@@ -3,7 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { DeepgramClient } from "@deepgram/sdk";
+import { createClient } from "@deepgram/sdk";
+const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
 dotenv.config();
 
@@ -18,8 +19,8 @@ app.use(express.json());
 
 app.get("/", (req, res) => res.send("Backend working"));
 
-// ─── Deepgram ──────────────────────────────────────────────────────────────
-const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
+// // ─── Deepgram ──────────────────────────────────────────────────────────────
+// const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
 
 const DEBATE_OPTIONS = {
   model: "nova-2",
@@ -36,20 +37,18 @@ async function transcribeBuffer(chunks, speaker, round, roomId) {
   const combined = Buffer.concat(chunks);
   console.log(`🎙️ Transcribing ${speaker} R${round} — ${combined.length} bytes`);
   try {
-    const response = await deepgram.listen.prerecorded.transcribeFile(
-      { buffer: combined, mimetype: "audio/webm" },
-      DEBATE_OPTIONS
-    );
+    const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+  combined,
+  DEBATE_OPTIONS
+);
 
-    const transcript = response.result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+if (error) { console.error("Deepgram error:", error); return; }
 
-    if (!transcript?.trim()) {
-      console.log(`⚠️ Empty transcript: ${speaker} R${round}`);
-      return;
-    }
+const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+if (!transcript?.trim()) { console.log(`⚠️ Empty transcript: ${speaker} R${round}`); return; }
 
-    console.log(`✅ [${speaker} R${round}]: ${transcript}`);
-    io.to(roomId).emit("transcript", { speaker, round, text: transcript });
+console.log(`✅ [${speaker} R${round}]: ${transcript}`);
+io.to(roomId).emit("transcript", { speaker, round, text: transcript });
 
   } catch (err) {
     console.error("Transcription failed:", err.message);
