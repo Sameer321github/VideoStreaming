@@ -36,15 +36,21 @@ async function transcribeBuffer(chunks, speaker, round, roomId) {
   const combined = Buffer.concat(chunks);
   console.log(`🎙️ Transcribing ${speaker} R${round} — ${combined.length} bytes`);
   try {
-    const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-      combined,
-      { ...DEBATE_OPTIONS, mimetype: "audio/webm" }
+    const response = await deepgram.listen.prerecorded.transcribeFile(
+      { buffer: combined, mimetype: "audio/webm" },
+      DEBATE_OPTIONS
     );
-    if (error) { console.error("Deepgram error:", error.message); return; }
-    const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-    if (!transcript?.trim()) { console.log(`⚠️ Empty transcript: ${speaker} R${round}`); return; }
+
+    const transcript = response.result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+
+    if (!transcript?.trim()) {
+      console.log(`⚠️ Empty transcript: ${speaker} R${round}`);
+      return;
+    }
+
     console.log(`✅ [${speaker} R${round}]: ${transcript}`);
     io.to(roomId).emit("transcript", { speaker, round, text: transcript });
+
   } catch (err) {
     console.error("Transcription failed:", err.message);
   }
