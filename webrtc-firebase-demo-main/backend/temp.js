@@ -6,121 +6,134 @@ import { Server } from "socket.io";
 import { DeepgramClient } from "@deepgram/sdk";
 
 dotenv.config();
-const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("Backend working");
-});
+app.get("/", (req, res) => res.send("Backend working"));
 
-
+// ─── Deepgram ──────────────────────────────────────────────────────────────
+const deepgram = new DeepgramClient(process.env.DEEPGRAM_API_KEY);
 
 const DEBATE_OPTIONS = {
   model: "nova-2",
   language: "en-US",
   smart_format: true,
   punctuate: true,
-  paragraphs: false,  // keep flat for live transcript display
+  paragraphs: false,
   utterances: false,
   filler_words: false,
 };
 
-// ─── Per-socket audio buffer store ─────────────────────────────────────────
-// Structure: audioBuffers[socketId][speaker] = Buffer[]
-const audioBuffers = {};
-
-async function transcribeBuffer(chunks, socketId, speaker, round) {
+async function transcribeBuffer(chunks, speaker, round, roomId) {
   if (!chunks || chunks.length === 0) return;
-
-  // Concatenate all received chunks into one Buffer
   const combined = Buffer.concat(chunks);
-
-  console.log(`🎙️ Transcribing ${speaker} (round ${round}) — ${combined.length} bytes`);
-
+  console.log(`🎙️ Transcribing ${speaker} R${round} — ${combined.length} bytes`);
   try {
     const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-    combined,
-    { ...DEBATE_OPTIONS, mimetype: "audio/webm" }
+      combined,
+      { ...DEBATE_OPTIONS, mimetype: "audio/webm" }
     );
-
-    if (error) {
-      console.error("Deepgram error:", error.message);
-      return;
-    }
-
+    if (error) { console.error("Deepgram error:", error.message); return; }
     const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-
-    if (!transcript || transcript.trim() === "") {
-      console.log(`⚠️ Empty transcript for ${speaker} round ${round}`);
-      return;
-    }
-
-    console.log(`✅ Transcript [${speaker} R${round}]: ${transcript}`);
-
-    // Emit back to that specific socket
-    io.to(socketId).emit("transcript", {
-      speaker,  // "speaker1" or "speaker2"
-      round,
-      text: transcript,
-    });
-
+    if (!transcript?.trim()) { console.log(`⚠️ Empty transcript: ${speaker} R${round}`); return; }
+    console.log(`✅ [${speaker} R${round}]: ${transcript}`);
+    io.to(roomId).emit("transcript", { speaker, round, text: transcript });
   } catch (err) {
     console.error("Transcription failed:", err.message);
   }
 }
 
+// ─── Audio buffers ─────────────────────────────────────────────────────────
+const audioBuffers = {};
+
 // ─── Socket.IO ─────────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
-  // Init buffer store for this socket
+  console.log("Connected:", socket.id);
   audioBuffers[socket.id] = {};
 
-  // Frontend emits this for every ~3s chunk during a speaker's turn
-  // payload: { speaker: "speaker1"|"speaker2", round: number, chunk: ArrayBuffer }
-  socket.on("audio:chunk", ({ speaker, round, chunk }) => {
-    if (!speaker || !chunk) return;
+  // ── WebRTC signaling ────────────────────────────────────────────────────
 
-    const key = `${speaker}_${round}`;
-    if (!audioBuffers[socket.id][key]) {
-      audioBuffers[socket.id][key] = [];
-    }
-
-    audioBuffers[socket.id][key].push(Buffer.from(chunk));
-    console.log(`📦 Received chunk: ${speaker} R${round} — ${chunk.byteLength} bytes`);
+  // Caller creates a room and gets a room ID back
+  socket.on("create:room", () => {
+    const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+    socket.join(roomId);
+    socket.data.roomId = roomId;
+    socket.data.role = "caller";
+    socket.emit("room:created", roomId);
+    console.log(`Room created: ${roomId}`);
   });
 
-  // Frontend emits this when a speaker's turn ends (timer ran out or "End Argument")
-  // payload: { speaker: "speaker1"|"speaker2", round: number }
+  // Answerer joins existing room
+  socket.on("join:room", (roomId) => {
+    const room = io.sockets.adapter.rooms.get(roomId);
+    if (!room) {
+      socket.emit("room:error", "Room not found");
+      return;
+    }
+    socket.join(roomId);
+    socket.data.roomId = roomId;
+    socket.data.role = "answerer";
+    // Tell caller that someone joined so they can send the offer
+    socket.to(roomId).emit("peer:joined");
+    console.log(`${socket.id} joined room: ${roomId}`);
+  });
+
+  // Relay WebRTC offer from caller to answerer
+  socket.on("webrtc:offer", (offer) => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit("webrtc:offer", offer);
+  });
+
+  // Relay WebRTC answer from answerer to caller
+  socket.on("webrtc:answer", (answer) => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit("webrtc:answer", answer);
+  });
+
+  // Relay ICE candidates
+  socket.on("webrtc:ice", (candidate) => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit("webrtc:ice", candidate);
+  });
+
+  // ── Debate phase sync ───────────────────────────────────────────────────
+  socket.on("debate:phase", (payload) => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.to(roomId).emit("debate:phase", payload);
+  });
+
+  // ── Audio transcription ─────────────────────────────────────────────────
+  socket.on("audio:chunk", ({ speaker, round, chunk }) => {
+    if (!speaker || !chunk) return;
+    const key = `${speaker}_${round}`;
+    if (!audioBuffers[socket.id][key]) audioBuffers[socket.id][key] = [];
+    audioBuffers[socket.id][key].push(Buffer.from(chunk));
+    console.log(`📦 Chunk: ${speaker} R${round} — ${chunk.byteLength} bytes`);
+  });
+
   socket.on("turn:end", async ({ speaker, round }) => {
     if (!speaker) return;
-
     const key = `${speaker}_${round}`;
     const chunks = audioBuffers[socket.id]?.[key];
-
+    const roomId = socket.data.roomId;
     console.log(`🔔 Turn ended: ${speaker} R${round}`);
-
-    // Transcribe whatever was buffered
-    await transcribeBuffer(chunks, socket.id, speaker, round);
-
-    // Clear buffer for this turn
-    if (audioBuffers[socket.id]) {
-      delete audioBuffers[socket.id][key];
-    }
+    await transcribeBuffer(chunks, speaker, round, roomId);
+    if (audioBuffers[socket.id]) delete audioBuffers[socket.id][key];
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    console.log("Disconnected:", socket.id);
     delete audioBuffers[socket.id];
   });
 });
